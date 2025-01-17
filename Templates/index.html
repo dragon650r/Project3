@@ -3,13 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Netflix Career Trajectories</title>
+    <title>Netflix Data Visualization</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <h1>Top 20 Actors with Longest Career Trajectories on Netflix</h1>
-    <div>
-        <!-- The Plotly graph will be inserted here by Flask -->
-        {{ plot|safe }}
+    <div class="container mt-4">
+        <h1>Netflix Data Visualization</h1>
+        <p>Select a chart to view:</p>
+        <a href="/career" class="btn btn-primary mb-3">View Career Trajectories Chart</a>
+        <a href="/pie" class="btn btn-primary mb-3">View Directors by Genre Pie Chart</a>
+
+        <!-- Display Career Trajectory Chart -->
+        {% if plot_career %}
+            <h3>Career Trajectories Chart</h3>
+            <div>{{ plot_career|safe }}</div>
+        {% endif %}
+
+        <!-- Display Directors by Genre Pie Chart -->
+        {% if plot_pie %}
+            <h3>Directors by Genre Pie Chart</h3>
+            <div>{{ plot_pie|safe }}</div>
+        {% endif %}
     </div>
 </body>
 </html>
