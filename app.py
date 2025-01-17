@@ -1,85 +1,173 @@
 from flask import Flask, render_template
 import pandas as pd
+from sqlalchemy import create_engine
 import plotly.express as px
+from bokeh.embed import components
+import matplotlib.pyplot as plt
+import io
+import os
 import plotly.io as pio
+from flask import send_file
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Load the Netflix dataset
-df = pd.read_csv('resources/netflix_titles.csv')
-
-# Filter out rows where the 'Director' column is null
-df_cleaned = df[df['director'].notnull()]
-
-# Ensure 'release_year' is numeric and handle missing values
-df_cleaned.loc[:, 'release_year'] = pd.to_numeric(df_cleaned['release_year'], errors='coerce')
-df_cleaned = df_cleaned.dropna(subset=['release_year'])
-
-# Split the 'cast' column to get individual actors
-df_cleaned['cast'] = df_cleaned['cast'].fillna('')
-df_cast_split = df_cleaned.assign(cast=df_cleaned['cast'].str.split(', ')).explode('cast')
-
-# Remove entries where actor is null or empty
-df_cast_split = df_cast_split[df_cast_split['cast'] != '']
-
-# Calculate the career span for each actor (difference between first and last appearance year)
-career_span = df_cast_split.groupby('cast')['release_year'].agg(['min', 'max'])
-career_span['trajectory'] = career_span['max'] - career_span['min']
-
-# Get the top 20 actors with the longest career trajectories
-top_actors = career_span.nlargest(20, 'trajectory').index
-
-# Filter the data to only include the top 20 actors
-df_filtered = df_cast_split[df_cast_split['cast'].isin(top_actors)]
-
-# Create the career trajectory plot (Scatter Plot)
-fig_career_trajectory = px.scatter(
-    df_filtered,
-    x='release_year', y='cast', color='cast',
-    title='Actors with Longest Career Trajectories on Netflix (By Year, Top 20 Actors)',
-    labels={'release_year': 'Year', 'cast': 'Actor'},
-    color_discrete_sequence=px.colors.sequential.Viridis,
-    opacity=0.7,
-    height=600
-)
-
-# Convert the Plotly career trajectory graph to HTML div
-graph_career_html = pio.to_html(fig_career_trajectory, full_html=False)
-
-# Hunter's Pie Chart - Genres and Directors
-# Manually input the data for genres and directors
-genres = ['Documentaries', 'Dramas & International Movies', 'Stand-Up Comedy']
-director_counts = [359, 362, 334]  # Corresponding counts for each genre
-directors = ['Vlad Yudin', 'Youssef Chahine', 'Raúl Campos, Jan Suter']  # The most frequent directors for each genre
-
-# Create the Pie Chart for Directors by Genre
-fig_pie_chart = px.pie(
-    names=genres, values=director_counts,
-    title='Directors by Genre on Netflix',
-    labels={'names': 'Genre', 'values': 'Movies/TV Shows Produced'},
-    color=genres,
-    color_discrete_sequence=px.colors.sequential.Inferno
-)
-
-# Convert the Plotly pie chart graph to HTML div
-graph_pie_html = pio.to_html(fig_pie_chart, full_html=False)
-
-# Home route that shows the home page with the "Career Trajectories" and "Directors by Genre" options
+# Homepage
 @app.route('/')
 def index():
-    return render_template('index.html', plot_career=graph_career_html, plot_pie=graph_pie_html)
+    return render_template('index.html')
 
-# Route for the career trajectories chart
-@app.route('/career')
-def career_chart():
-    return render_template('index.html', plot_career=graph_career_html)
+# Hunter's pie chart
+@app.route('/hunter')
+def hunter_pie_chart():
+    df = pd.read_csv('resources/netflix_titles.csv')
+    
+    # Filter for each genre and get directors
+    genres = ['Documentaries', 'Dramas & International Movies', 'Stand-Up Comedy']
+    director_counts = [359, 362, 334]
+    directors = ['Vlad Yudin', 'Youssef Chahine', 'Raúl Campos, Jan Suter']
 
-# Route for the directors by genre pie chart
-@app.route('/pie')
-def pie_chart():
-    return render_template('index.html', plot_pie=graph_pie_html)
+    # Create the pie chart
+    plt.figure(figsize=(8, 8))
+    plt.pie(director_counts, labels=genres, autopct='%1.1f%%', startangle=90, colors=plt.cm.Paired.colors)
+    plt.title('Genres and Directors')
+    plt.axis('equal')
 
-# Run the Flask app
+    # Save the pie chart to memory and serve it
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+
+    return send_file(img, mimetype='image/png')
+
+# Jose's Plotly chart
+@app.route('/jose')
+def jose_scatter_plot():
+    df = pd.read_csv('resources/netflix_titles.csv')
+    df_cleaned = df[df['director'].notnull()]
+    df_cleaned = df_cleaned.copy()
+    df_cleaned['release_year'] = pd.to_numeric(df_cleaned['release_year'], errors='coerce')
+    df_cleaned = df_cleaned.dropna(subset=['release_year'])
+    df_cleaned['cast'] = df_cleaned['cast'].fillna('')
+    df_cast_split = df_cleaned.assign(cast=df_cleaned['cast'].str.split(', ')).explode('cast')
+    df_cast_split = df_cast_split[df_cast_split['cast'] != '']
+    career_span = df_cast_split.groupby('cast')['release_year'].agg(['min', 'max'])
+    career_span['trajectory'] = career_span['max'] - career_span['min']
+    top_actors = career_span.nlargest(20, 'trajectory').index
+    df_filtered = df_cast_split[df_cast_split['cast'].isin(top_actors)]
+    
+    fig = px.scatter(df_filtered, x='release_year', y='cast', color='cast',
+                     title='Actors with Longest Career Trajectories on Netflix (By Year)',
+                     labels={'release_year': 'Year', 'cast': 'Actor'},
+                     color_discrete_sequence=px.colors.sequential.Viridis, opacity=0.7)
+    
+    fig.update_layout(xaxis=dict(tickmode='linear', tick0=df_filtered['release_year'].min(), dtick=1),
+                      yaxis=dict(tickmode='array', tickvals=top_actors),
+                      hovermode='closest', showlegend=False, title_x=0.5)
+    
+    graph_html = pio.to_html(fig, full_html=False)
+    return render_template('plot.html', graph_html=graph_html)
+
+# Aidan's Bokeh chart
+@app.route('/aidan')
+def aidan_scatter_plot():
+    df = pd.read_csv('resources/netflix_titles.csv')
+    df_cleaned = df[df['director'].notnull()]
+    df_cleaned = df_cleaned.copy()
+    df_cleaned = df_cleaned.dropna(subset=['cast'])
+    df_cast_split = df_cleaned.assign(cast=df_cleaned['cast'].str.split(', ')).explode('cast')
+    df_cast_split = df_cast_split[df_cast_split['cast'] != '']
+    movie_count = df_cast_split['cast'].value_counts().head(100)
+    x_values1 = movie_count.index.tolist()
+    y_values1 = movie_count.values.tolist()
+
+    from bokeh.plotting import figure
+    from bokeh.models import ColumnDataSource, HoverTool, FactorRange
+    from bokeh.palettes import Category10
+    from bokeh.embed import components
+
+    colors = Category10[10]
+    color_dict = {name: colors[i % 10] for i, name in enumerate(x_values1)}
+    source = ColumnDataSource(data=dict(
+        x=x_values1, y=y_values1, color=[color_dict[name] for name in x_values1], name=x_values1, frequency=y_values1))
+    p = figure(title="Top 100 Actors Frequency on Netflix", toolbar_location="above", tools="pan,reset,hover,wheel_zoom",
+               height=1000, width=1000, x_range=FactorRange(*x_values1))
+    p.scatter(x='x', y='y', source=source, size=8, color='color', alpha=0.7, legend_field="name", fill_alpha=0.6)
+    hover = HoverTool()
+    hover.tooltips = [("Actor Name", "@name"), ("# of Movies on Netflix", "@frequency")]
+    p.add_tools(hover)
+    p.legend.title = 'Actor Names'
+    p.legend.orientation = 'vertical'
+    p.legend.location = 'top_right'
+    script, div = components(p)
+
+    return render_template('bokeh-plot.html', script=script, div=div)
+
+# Plotly route
+@app.route('/plotly')
+def plotly_plot():
+    df = pd.read_csv('resources/netflix_titles.csv')
+    df_cleaned = df[df['director'].notnull()]
+    df_cleaned = df_cleaned.copy()
+    df_cleaned['release_year'] = pd.to_numeric(df_cleaned['release_year'], errors='coerce')
+    df_cleaned = df_cleaned.dropna(subset=['release_year'])
+    df_cleaned['cast'] = df_cleaned['cast'].fillna('')
+    df_cast_split = df_cleaned.assign(cast=df_cleaned['cast'].str.split(', ')).explode('cast')
+    df_cast_split = df_cast_split[df_cast_split['cast'] != '']
+    career_span = df_cast_split.groupby('cast')['release_year'].agg(['min', 'max'])
+    career_span['trajectory'] = career_span['max'] - career_span['min']
+    top_actors = career_span.nlargest(20, 'trajectory').index
+    df_filtered = df_cast_split[df_cast_split['cast'].isin(top_actors)]
+    
+    fig = px.scatter(df_filtered, x='release_year', y='cast', color='cast',
+                     title='Actors with Longest Career Trajectories on Netflix (By Year)',
+                     labels={'release_year': 'Year', 'cast': 'Actor'},
+                     color_discrete_sequence=px.colors.sequential.Viridis, opacity=0.7)
+    
+    fig.update_layout(xaxis=dict(tickmode='linear', tick0=df_filtered['release_year'].min(), dtick=1),
+                      yaxis=dict(tickmode='array', tickvals=top_actors),
+                      hovermode='closest', showlegend=False, title_x=0.5)
+    
+    plot_data = {
+        "data": fig.to_plotly_json()['data'],
+        "layout": fig.to_plotly_json()['layout']
+    }
+    
+    return render_template('plot.html', plot_data=plot_data)
+
+# Bokeh route
+@app.route('/bokeh')
+def bokeh_plot():
+    df = pd.read_csv('resources/netflix_titles.csv')
+    df_cleaned = df[df['director'].notnull()]
+    df_cleaned = df_cleaned.copy()
+    df_cleaned = df_cleaned.dropna(subset=['cast'])
+    df_cast_split = df_cleaned.assign(cast=df_cleaned['cast'].str.split(', ')).explode('cast')
+    df_cast_split = df_cast_split[df_cast_split['cast'] != '']
+    movie_count = df_cast_split['cast'].value_counts().head(100)
+    x_values1 = movie_count.index.tolist()
+    y_values1 = movie_count.values.tolist()
+
+    from bokeh.plotting import figure
+    from bokeh.models import ColumnDataSource, HoverTool, FactorRange
+    from bokeh.palettes import Category10
+    from bokeh.embed import components
+
+    colors = Category10[10]
+    color_dict = {name: colors[i % 10] for i, name in enumerate(x_values1)}
+    source = ColumnDataSource(data=dict(
+        x=x_values1, y=y_values1, color=[color_dict[name] for name in x_values1], name=x_values1, frequency=y_values1))
+    p = figure(title="Top 100 Actors Frequency on Netflix", toolbar_location="above", tools="pan,reset,hover,wheel_zoom",
+               height=1000, width=1000, x_range=FactorRange(*x_values1))
+    p.scatter(x='x', y='y', source=source, size=8, color='color', alpha=0.7, legend_field="name", fill_alpha=0.6)
+    hover = HoverTool()
+    hover.tooltips = [("Actor Name", "@name"), ("# of Movies on Netflix", "@frequency")]
+    p.add_tools(hover)
+    p.legend.title = 'Actor Names'
+    p.legend.orientation = 'vertical'
+    p.legend.location = 'top_right'
+    script, div = components(p)
+    
+    return render_template('bokeh-plot.html', script=script, div=div)
+
 if __name__ == '__main__':
     app.run(debug=True)
