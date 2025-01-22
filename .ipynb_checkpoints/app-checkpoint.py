@@ -37,7 +37,7 @@ def hunter_pie_chart():
     plt.savefig(img, format='png')
     img.seek(0)
 
-    return send_file(img, mimetype='image/png')
+    return render_template('plot.html', graph_html=None, hunter_questions=True, img=img)
 
 # Jose's Plotly chart
 @app.route('/jose')
@@ -65,7 +65,8 @@ def jose_scatter_plot():
                       hovermode='closest', showlegend=False, title_x=0.5)
     
     graph_html = pio.to_html(fig, full_html=False)
-    return render_template('plot.html', graph_html=graph_html)
+    
+    return render_template('plot.html', graph_html=graph_html, hunter_questions=False, jose_questions=True)
 
 # Aidan's Bokeh chart
 @app.route('/aidan')
@@ -132,7 +133,7 @@ def plotly_plot():
         "layout": fig.to_plotly_json()['layout']
     }
     
-    return render_template('plot.html', plot_data=plot_data)
+    return render_template('plot.html', plot_data=plot_data, hunter_questions=False, jose_questions=True)
 
 # Bokeh route
 @app.route('/bokeh')

@@ -26,9 +26,11 @@ def hunter_pie_chart():
     director_counts = [359, 362, 334]
     directors = ['Vlad Yudin', 'Youssef Chahine', 'Raúl Campos, Jan Suter']
 
-    # Create the pie chart
+    # Create the pie chart with director names included in the labels
+    labels = [f'{genre}\nDirector: {director}' for genre, director in zip(genres, directors)]
+    
     plt.figure(figsize=(8, 8))
-    plt.pie(director_counts, labels=genres, autopct='%1.1f%%', startangle=90, colors=plt.cm.Paired.colors)
+    plt.pie(director_counts, labels=labels, autopct='%1.1f%%', startangle=90, colors=plt.cm.Paired.colors)
     plt.title('Genres and Directors')
     plt.axis('equal')
 
